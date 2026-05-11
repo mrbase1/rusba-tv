@@ -1,0 +1,106 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user preferences and subscription status.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "subscriptionTier": { "type": "string", "enum": ["free", "premium"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "subscriptionTier"]
+    },
+    "Favorite": {
+      "title": "Favorite Channel",
+      "description": "A user's favorite channel reference.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "channelId": { "type": "string" },
+        "name": { "type": "string" },
+        "logo": { "type": "string" },
+        "url": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "channelId", "url"]
+    },
+    "Recording": {
+      "title": "Stream Recording",
+      "description": "Metadata for a recorded stream snippet.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "channelName": { "type": "string" },
+        "title": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "duration": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "videoUrl"]
+    },
+    "AppConfig": {
+      "title": "App Configuration",
+      "description": "Global settings including ads and monetization.",
+      "type": "object",
+      "properties": {
+        "adsEnabled": { "type": "boolean" },
+        "adOverlayUrl": { "type": "string" },
+        "premiumPrice": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "PaystackConfig": {
+      "title": "Paystack Configuration",
+      "description": "Settings for Paystack payment gateway.",
+      "type": "object",
+      "properties": {
+        "publicKey": { "type": "string" },
+        "secretKey": { "type": "string" },
+        "isEnabled": { "type": "boolean" },
+        "currency": { "type": "string" }
+      }
+    },
+    "FeaturedChannel": {
+      "title": "Featured Channel",
+      "description": "Override or highlight specific channels.",
+      "type": "object",
+      "properties": {
+        "channelId": { "type": "string" },
+        "isFeatured": { "type": "boolean" },
+        "featuredOrder": { "type": "number" },
+        "customLogo": { "type": "string" },
+        "customName": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and settings."
+    },
+    "/users/{userId}/favorites/{favId}": {
+      "schema": "Favorite",
+      "description": "User favorite channels."
+    },
+    "/users/{userId}/recordings/{recordingId}": {
+      "schema": "Recording",
+      "description": "User recorded streams."
+    },
+    "/config/global": {
+      "schema": "AppConfig",
+      "description": "Global application configuration."
+    },
+    "/config/paystack": {
+      "schema": "PaystackConfig",
+      "description": "Paystack integration settings."
+    },
+    "/featuredChannels/{channelId}": {
+      "schema": "FeaturedChannel",
+      "description": "Featured channel settings."
+    }
+  }
+}

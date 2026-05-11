@@ -1,0 +1,233 @@
+import React, { useEffect, useRef, useState } from 'react';
+import Hls from 'hls.js';
+import { Maximize, Minimize, Volume2, VolumeX, Play, Pause, Circle, Square, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+interface PlayerProps {
+  url: string;
+  onRecordStart?: () => void;
+  onRecordStop?: (blob: Blob) => void;
+  adOverlayUrl?: string;
+  showAd?: boolean;
+  onAdClose?: () => void;
+}
+
+export const Player: React.FC<PlayerProps> = ({ 
+  url, 
+  onRecordStart, 
+  onRecordStop,
+  adOverlayUrl,
+  showAd,
+  onAdClose
+}) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    if (!videoRef.current || !url) return;
+
+    let hls: Hls | null = null;
+    const video = videoRef.current;
+
+    const handleLoadedMetadata = () => {
+      video.play().catch(error => {
+        if (error.name !== 'AbortError') console.error('Playback error:', error);
+      });
+      setIsPlaying(true);
+    };
+
+    if (Hls.isSupported()) {
+      hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(error => {
+          if (error.name !== 'AbortError') console.error('Playback error:', error);
+        });
+        setIsPlaying(true);
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = url;
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    }
+
+    return () => {
+      if (hls) {
+        hls.destroy();
+      }
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.pause();
+      video.src = '';
+      video.load();
+    };
+  }, [url]);
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoRef.current.play().catch(error => {
+          if (error.name !== 'AbortError') console.error('Playback error:', error);
+        });
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const handleRecording = () => {
+    if (!isRecording) {
+      if (!videoRef.current) return;
+      
+      const stream = (videoRef.current as any).captureStream ? (videoRef.current as any).captureStream() : null;
+      if (!stream) {
+        alert("Recording not supported in this browser version.");
+        return;
+      }
+
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        onRecordStop?.(blob);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      onRecordStart?.();
+    } else {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+    }
+  };
+
+  return (
+    <div className="relative group aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-700">
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain"
+        playsInline
+      />
+      
+      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-8">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-6">
+            <button
+              onClick={togglePlay}
+              className="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white hover:scale-105 transition-transform"
+            >
+              {isPlaying ? <Pause size={24} fill="white" /> : <Play size={24} fill="white" />}
+            </button>
+            
+            <div className="flex items-center gap-3 group/volume">
+              <button
+                onClick={toggleMute}
+                className="p-2 text-slate-400 hover:text-white transition-colors"
+              >
+                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={volume}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setVolume(val);
+                  if (videoRef.current) videoRef.current.volume = val;
+                }}
+                className="w-24 accent-blue-600 appearance-none bg-slate-700 h-1 rounded-full cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleRecording}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm shadow-lg transition-all ${
+                isRecording 
+                ? 'bg-red-600 text-white animate-pulse shadow-red-600/20' 
+                : 'bg-white/10 text-white hover:bg-white/20 backdrop-blur-md border border-white/10'
+              }`}
+            >
+              <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-white' : 'bg-red-600'}`} />
+              {isRecording ? 'STOP' : 'RECORD'}
+            </button>
+            
+            <button
+              onClick={() => videoRef.current?.requestFullscreen()}
+              className="p-2 text-slate-400 hover:text-white transition-colors"
+            >
+              <Maximize size={20} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute top-4 left-4 flex gap-2">
+        <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Live</span>
+        <span className="bg-black/60 backdrop-blur-sm text-white text-[10px] font-medium px-2 py-0.5 rounded uppercase tracking-wider">HD 1080p</span>
+      </div>
+
+      <AnimatePresence>
+        {showAd && adOverlayUrl && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="absolute bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl bg-black/80 backdrop-blur-md border border-slate-700 p-2 rounded-lg z-20 flex items-center gap-4"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Sponsored</span>
+                <button onClick={onAdClose} className="p-1 hover:bg-slate-800 rounded">
+                  <X size={14} className="text-slate-400" />
+                </button>
+              </div>
+              {adOverlayUrl.startsWith('http') && adOverlayUrl.match(/\.(jpeg|jpg|gif|png)$/) ? (
+                <img src={adOverlayUrl} alt="Ad" className="w-full h-12 object-cover rounded" />
+              ) : (
+                <div className="bg-white/5 p-2 rounded flex items-center justify-between">
+                  <p className="text-xs text-white font-medium truncate">{adOverlayUrl}</p>
+                  <a href="#" className="text-xs text-blue-400 font-bold hover:underline ml-4">Learn More</a>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {isRecording && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="absolute top-6 right-6 flex items-center gap-2 bg-red-600/90 text-white px-3 py-1 rounded-sm text-xs font-mono tracking-widest uppercase italic"
+          >
+            <div className="w-2 h-2 rounded-full bg-white animate-ping" />
+            Live Recording
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};

@@ -1,0 +1,15 @@
+{
+  "name": "Base1 TV",
+  "description": "Premium IPTV streaming application with EPG support, favorites, recording capabilities, and seamless Chromecast integration.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "video_streaming",
+    "chromecast_support",
+    "epg_support",
+    "monetization"
+  ]
+}
