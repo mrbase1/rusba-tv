@@ -5,10 +5,11 @@ import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
-// Using initializeFirestore with AutoDetectLongPolling to allow the SDK to choose the best transport
-// for the current environment, which often resolves connectivity issues in sandboxed previews.
+// Using initializeFirestore with experimentalForceLongPolling to bypass potential WebSocket
+// blocks in the preview / deployment environment. This ensures immediate transport fallback.
 export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
+  experimentalForceLongPolling: true,
+  useFetchStreams: false, // Prevents fetch stream hanging issues in some browser environments
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
 export const auth = getAuth(app);
