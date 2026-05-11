@@ -20,12 +20,14 @@ export const Player: React.FC<PlayerProps> = ({
   showAd,
   onAdClose
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -41,8 +43,14 @@ export const Player: React.FC<PlayerProps> = ({
   };
 
   useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
     resetControlsTimeout();
     return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
   }, []);
@@ -143,9 +151,23 @@ export const Player: React.FC<PlayerProps> = ({
     }
   };
 
+  const toggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!containerRef.current) return;
+
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   return (
     <div 
-      className="relative group aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-700 select-none"
+      ref={containerRef}
+      className={`relative group bg-black overflow-hidden shadow-2xl border border-slate-700 select-none ${isFullscreen ? 'w-screen h-screen' : 'aspect-video rounded-2xl'}`}
       onClick={handleContainerClick}
       onMouseMove={resetControlsTimeout}
     >
@@ -204,10 +226,10 @@ export const Player: React.FC<PlayerProps> = ({
             </button>
             
             <button
-              onClick={(e) => { e.stopPropagation(); videoRef.current?.requestFullscreen(); }}
+              onClick={toggleFullscreen}
               className="p-1.5 md:p-2 text-slate-400 hover:text-white transition-colors"
             >
-              <Maximize size={18} className="md:w-5 md:h-5" />
+              {isFullscreen ? <Minimize size={18} className="md:w-5 md:h-5" /> : <Maximize size={18} className="md:w-5 md:h-5" />}
             </button>
           </div>
         </div>

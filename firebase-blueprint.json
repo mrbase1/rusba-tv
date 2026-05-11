@@ -75,6 +75,16 @@
         "customLogo": { "type": "string" },
         "customName": { "type": "string" }
       }
+    },
+    "PremiumChannel": {
+      "title": "Premium Channel",
+      "description": "Mark specific channels as premium only.",
+      "type": "object",
+      "properties": {
+        "channelId": { "type": "string" },
+        "isPremium": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
@@ -101,6 +111,10 @@
     "/featuredChannels/{channelId}": {
       "schema": "FeaturedChannel",
       "description": "Featured channel settings."
+    },
+    "/premiumChannels/{channelId}": {
+      "schema": "PremiumChannel",
+      "description": "Premium restricted channels."
     }
   }
 }

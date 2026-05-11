@@ -39,6 +39,7 @@ export function AdminDashboard({ onClose, availableChannels }: AdminDashboardPro
   const [activeTab, setActiveTab] = useState<'users' | 'channels' | 'paystack' | 'ads'>('users');
   const [users, setUsers] = useState<any[]>([]);
   const [featuredChannels, setFeaturedChannels] = useState<any[]>([]);
+  const [premiumChannelIds, setPremiumChannelIds] = useState<Set<string>>(new Set());
   const [paystackConfig, setPaystackConfig] = useState<any>({
     publicKey: '',
     secretKey: '',
@@ -80,6 +81,11 @@ export function AdminDashboard({ onClose, availableChannels }: AdminDashboardPro
       setFeaturedChannels(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
+    // Sync Premium Channels
+    const premiumUnsub = onSnapshot(collection(db, 'premiumChannels'), (snapshot) => {
+      setPremiumChannelIds(new Set(snapshot.docs.map(d => d.id)));
+    });
+
     // Sync Paystack Config
     const paystackUnsub = onSnapshot(doc(db, 'config', 'paystack'), (doc) => {
       if (doc.exists()) setPaystackConfig(doc.data());
@@ -93,6 +99,7 @@ export function AdminDashboard({ onClose, availableChannels }: AdminDashboardPro
     return () => {
       usersUnsub();
       channelsUnsub();
+      premiumUnsub();
       paystackUnsub();
       adsUnsub();
     };
@@ -131,6 +138,25 @@ export function AdminDashboard({ onClose, availableChannels }: AdminDashboardPro
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `featuredChannels/${channel.id}`);
+    }
+  };
+
+  const togglePremium = async (channel: Channel) => {
+    const isPremium = premiumChannelIds.has(channel.id);
+    try {
+      if (isPremium) {
+        await deleteDoc(doc(db, 'premiumChannels', channel.id));
+        showMessage('success', 'Channel marked as FREE');
+      } else {
+        await setDoc(doc(db, 'premiumChannels', channel.id), {
+          channelId: channel.id,
+          isPremium: true,
+          updatedAt: new Date().toISOString()
+        });
+        showMessage('success', 'Channel marked as PREMIUM');
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `premiumChannels/${channel.id}`);
     }
   };
 
@@ -292,21 +318,37 @@ export function AdminDashboard({ onClose, availableChannels }: AdminDashboardPro
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar flex-1 pb-4">
                   {paginatedChannels.map(ch => {
                     const isFeatured = featuredChannels.some(f => f.channelId === ch.id);
+                    const isPremium = premiumChannelIds.has(ch.id) || ch.isPremium;
                     return (
                       <div key={ch.id} className={`p-4 rounded-2xl border transition-all flex items-center gap-4 ${isFeatured ? 'bg-blue-600/10 border-blue-600/40' : 'bg-slate-800/40 border-slate-800'}`}>
-                        <div className="w-12 h-12 bg-slate-900 rounded-lg p-2 flex-shrink-0 flex items-center justify-center border border-slate-800">
+                        <div className="w-12 h-12 bg-slate-900 rounded-lg p-2 flex-shrink-0 flex items-center justify-center border border-slate-800 relative">
                           {ch.logo ? <img src={ch.logo} className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" /> : <Tv size={20} className="text-slate-700" />}
+                          {isPremium && (
+                            <div className="absolute -top-1 -right-1 bg-amber-500 text-white rounded-full p-1 border-2 border-slate-900">
+                              <ShieldAlert size={8} />
+                            </div>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-white truncate">{ch.name}</p>
                           <p className="text-[10px] text-slate-500 uppercase tracking-widest">{ch.category}</p>
                         </div>
-                        <button 
-                          onClick={() => toggleFeatured(ch)}
-                          className={`p-2 rounded-lg transition-all ${isFeatured ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                        >
-                          {isFeatured ? <Check size={16} /> : <Plus size={16} />}
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            title={isPremium ? "Mark as Free" : "Mark as Premium"}
+                            onClick={() => togglePremium(ch)}
+                            className={`p-2 rounded-lg transition-all ${isPremium ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                          >
+                            <CreditCard size={14} />
+                          </button>
+                          <button 
+                            title={isFeatured ? "Remove from Featured" : "Add to Featured"}
+                            onClick={() => toggleFeatured(ch)}
+                            className={`p-2 rounded-lg transition-all ${isFeatured ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                          >
+                            {isFeatured ? <Check size={16} /> : <Plus size={16} />}
+                          </button>
+                        </div>
                       </div>
                     );
                   })}

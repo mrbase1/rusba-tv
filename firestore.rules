@@ -70,5 +70,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    match /premiumChannels/{channelId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }

@@ -20,7 +20,8 @@ import {
   LayoutGrid,
   List as ListIcon,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, signIn, logout, db } from './lib/firebase';
@@ -51,10 +52,23 @@ export default function App() {
   const [currentEPG, setCurrentEPG] = useState<any[]>([]);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [featuredIds, setFeaturedIds] = useState<Set<string>>(new Set());
+  const [premiumIds, setPremiumIds] = useState<Set<string>>(new Set());
   const [showPricing, setShowPricing] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [isTvMode, setIsTvMode] = useState(false);
   const channelListRef = useRef<HTMLDivElement>(null);
+
+  const handleChannelSelect = (ch: Channel, index?: number) => {
+    const isPremium = ch.isPremium || premiumIds.has(ch.id);
+    if (isPremium && userProfile?.subscriptionTier !== 'premium') {
+      setShowPricing(true);
+      return;
+    }
+    setSelectedChannel(ch);
+    if (index !== undefined) {
+      setFocusedIndex(index);
+    }
+  };
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
@@ -117,7 +131,10 @@ export default function App() {
       setIsLoading(true);
       const data = await parseM3U(DEFAULT_M3U);
       setChannels(data);
-      if (data.length > 0) setSelectedChannel(data[0]);
+      if (data.length > 0) {
+        const firstFree = data.find(c => !c.isPremium) || data[0];
+        setSelectedChannel(firstFree);
+      }
       setIsLoading(false);
     };
 
@@ -130,9 +147,17 @@ export default function App() {
       handleFirestoreError(error, OperationType.LIST, 'featuredChannels');
     });
 
+    // Sync Premium Channels
+    const premUnsub = onSnapshot(collection(db, 'premiumChannels'), (snapshot) => {
+      setPremiumIds(new Set(snapshot.docs.map(d => d.id)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'premiumChannels');
+    });
+
     return () => {
       unsubAuth();
       featUnsub();
+      premUnsub();
     };
   }, []);
 
@@ -207,7 +232,7 @@ export default function App() {
           break;
         case 'Enter':
           if (focusedIndex >= 0 && focusedIndex < filteredChannels.length) {
-            setSelectedChannel(filteredChannels[focusedIndex]);
+            handleChannelSelect(filteredChannels[focusedIndex], focusedIndex);
           }
           break;
         case 'Escape':
@@ -739,10 +764,7 @@ export default function App() {
                   <motion.div
                     key={ch.id}
                     layout
-                    onClick={() => {
-                      setSelectedChannel(ch);
-                      setFocusedIndex(index);
-                    }}
+                    onClick={() => handleChannelSelect(ch, index)}
                     className={`
                       group relative flex transition-all text-left outline-none cursor-pointer
                       ${viewMode === 'grid' ? 'flex-col bg-slate-800 border border-slate-700 p-3 rounded-xl hover:border-blue-500' : 'flex-row items-center gap-4 p-3 bg-slate-800/40 border border-transparent rounded-xl hover:bg-slate-800 hover:border-slate-700'}
@@ -754,6 +776,11 @@ export default function App() {
                         : ''}
                     `}
                   >
+                    { (ch.isPremium || premiumIds.has(ch.id)) && (
+                      <div className="absolute top-2 right-2 z-10 p-1 bg-amber-500 rounded-full text-white shadow-lg">
+                        <Lock size={12} />
+                      </div>
+                    )}
                     <div className={`
                       bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 transition-transform group-hover:scale-[1.02]
                       ${viewMode === 'grid' ? 'w-full aspect-square mb-2 p-4' : 'w-12 h-12 p-2'}
