@@ -1,19 +1,39 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Using initializeFirestore with AutoDetectLongPolling to allow the SDK to choose the best transport
+// for the current environment, which often resolves connectivity issues in sandboxed previews.
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId || '(default)');
+
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'config', 'global'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+/**
+ * Tests the Firestore connection with retries to account for transient network issues on boot.
+ */
+export async function testConnection(retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      // config/global is our known public-read config doc
+      await getDocFromServer(doc(db, 'config', 'global'));
+      console.log("Firestore connection established successfully.");
+      return;
+    } catch (error) {
+      if (i === retries - 1) {
+        console.error("Firestore connection failed persistently. Current State: OFFLINE");
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Final check: Client is reported as offline. Please verify Firebase Project ID and Database ID mapping.");
+        }
+      } else {
+        console.warn(`Firestore handshake attempt ${i + 1} failed, retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
   }
 }

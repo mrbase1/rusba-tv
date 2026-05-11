@@ -74,8 +74,14 @@ export default function App() {
             await setDoc(doc(db, userPath), newProfile);
             setUserProfile(newProfile);
           }
-        } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, userPath);
+        } catch (error: any) {
+          // If offline, don't crash the app with a fatal throw, just log it.
+          // The SDK will sync the setDoc if it's a transient connection issue.
+          if (error?.message?.includes('offline') || error?.code === 'unavailable') {
+            console.warn("Firestore appears to be offline. Profile sync will retry automatically.");
+          } else {
+            handleFirestoreError(error, OperationType.WRITE, userPath);
+          }
         }
 
         // Sync Favorites
