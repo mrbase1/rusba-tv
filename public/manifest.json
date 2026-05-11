@@ -1,0 +1,17 @@
+{
+  "name": "RusbaTV",
+  "short_name": "RusbaTV",
+  "description": "Premium IPTV streaming application with EPG support, favorites, and Smart TV navigation.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "https://res.cloudinary.com/dfsfskmha/image/upload/v1778482307/rusba/rusba-tv-logo-blkbg_plumhb.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { 
   Tv, 
   Search, 
@@ -52,6 +52,9 @@ export default function App() {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [featuredIds, setFeaturedIds] = useState<Set<string>>(new Set());
   const [showPricing, setShowPricing] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [isTvMode, setIsTvMode] = useState(false);
+  const channelListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
@@ -161,6 +164,67 @@ export default function App() {
     return [...base, ...Array.from(cats)].sort();
   }, [channels, featuredIds]);
 
+  // Scroll focused element into view
+  useEffect(() => {
+    if (focusedIndex >= 0 && channelListRef.current) {
+      const container = channelListRef.current;
+      const focusedElement = container.children[focusedIndex] as HTMLElement;
+      if (focusedElement) {
+        focusedElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest'
+        });
+      }
+    }
+  }, [focusedIndex]);
+
+  // Keyboard Navigation for TV
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Any keyboard interaction enables "TV Mode" styles
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
+        setIsTvMode(true);
+      }
+
+      if (showAdminDashboard || showPricing || showAdOverlay) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          setFocusedIndex(prev => Math.min(prev + (viewMode === 'grid' ? 2 : 1), filteredChannels.length - 1));
+          break;
+        case 'ArrowUp':
+          setFocusedIndex(prev => Math.max(prev - (viewMode === 'grid' ? 2 : 1), 0));
+          break;
+        case 'ArrowRight':
+          if (viewMode === 'grid') {
+            setFocusedIndex(prev => Math.min(prev + 1, filteredChannels.length - 1));
+          }
+          break;
+        case 'ArrowLeft':
+          if (viewMode === 'grid') {
+            setFocusedIndex(prev => Math.max(prev - 1, 0));
+          }
+          break;
+        case 'Enter':
+          if (focusedIndex >= 0 && focusedIndex < filteredChannels.length) {
+            setSelectedChannel(filteredChannels[focusedIndex]);
+          }
+          break;
+        case 'Escape':
+          setIsSidebarOpen(prev => !prev);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filteredChannels, focusedIndex, viewMode, showAdminDashboard, showPricing, showAdOverlay]);
+
+  // Reset focus when category or search changes
+  useEffect(() => {
+    setFocusedIndex(-1);
+  }, [activeCategory, searchQuery]);
+
   const toggleFavorite = async (channel: Channel) => {
     if (!user) {
       alert("Please sign in to save favorites.");
@@ -263,6 +327,34 @@ export default function App() {
             onClose={() => setShowAdminDashboard(false)} 
             availableChannels={channels}
           />
+        )}
+      </AnimatePresence>
+
+      {/* TV MODE INDICATOR */}
+      <AnimatePresence>
+        {isTvMode && (
+          <motion.div 
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] bg-blue-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4 text-sm font-bold border border-blue-400"
+          >
+            <div className="flex items-center gap-2">
+              <span className="bg-white/20 px-2 py-1 rounded">↑↓←→</span>
+              <span>Navigate</span>
+            </div>
+            <div className="w-px h-4 bg-white/20" />
+            <div className="flex items-center gap-2">
+              <span className="bg-white/20 px-2 py-1 rounded">ENTER</span>
+              <span>Watch</span>
+            </div>
+            <button 
+              onClick={() => setIsTvMode(false)}
+              className="ml-4 p-1 hover:bg-white/20 rounded-full transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -637,20 +729,28 @@ export default function App() {
                 </div>
               </div>
               
-              <div className={`
+              <div 
+                ref={channelListRef}
+                className={`
                 flex-1 overflow-y-auto px-6 pb-8 custom-scrollbar min-h-0
                 ${viewMode === 'grid' ? 'grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-2 gap-3' : 'space-y-2'}
               `}>
-                {filteredChannels.map((ch) => (
+                {filteredChannels.map((ch, index) => (
                   <motion.div
                     key={ch.id}
                     layout
-                    onClick={() => setSelectedChannel(ch)}
+                    onClick={() => {
+                      setSelectedChannel(ch);
+                      setFocusedIndex(index);
+                    }}
                     className={`
                       group relative flex transition-all text-left outline-none cursor-pointer
                       ${viewMode === 'grid' ? 'flex-col bg-slate-800 border border-slate-700 p-3 rounded-xl hover:border-blue-500' : 'flex-row items-center gap-4 p-3 bg-slate-800/40 border border-transparent rounded-xl hover:bg-slate-800 hover:border-slate-700'}
                       ${selectedChannel?.id === ch.id 
                         ? 'border-blue-600 ring-1 ring-blue-600/50 bg-slate-800 shadow-lg shadow-blue-600/10' 
+                        : ''}
+                      ${focusedIndex === index 
+                        ? 'ring-4 ring-blue-500 ring-offset-2 ring-offset-slate-900 border-blue-500 scale-[1.05] z-20 shadow-[0_0_30px_rgba(37,99,235,0.4)]' 
                         : ''}
                     `}
                   >
