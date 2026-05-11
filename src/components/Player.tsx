@@ -25,8 +25,31 @@ export const Player: React.FC<PlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  const resetControlsTimeout = () => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    setShowControls(true);
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+  };
+
+  useEffect(() => {
+    resetControlsTimeout();
+    return () => {
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    };
+  }, []);
+
+  const handleContainerClick = () => {
+    resetControlsTimeout();
+  };
 
   useEffect(() => {
     if (!videoRef.current || !url) return;
@@ -121,29 +144,33 @@ export const Player: React.FC<PlayerProps> = ({
   };
 
   return (
-    <div className="relative group aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-700">
+    <div 
+      className="relative group aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-700 select-none"
+      onClick={handleContainerClick}
+      onMouseMove={resetControlsTimeout}
+    >
       <video
         ref={videoRef}
-        className="w-full h-full object-contain"
+        className="w-full h-full object-contain pointer-events-none"
         playsInline
       />
       
-      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-8">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
+      <div className={`absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent transition-opacity flex flex-col justify-end p-4 md:p-8 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className="flex items-center justify-between gap-2 md:gap-4">
+          <div className="flex items-center gap-3 md:gap-6">
             <button
-              onClick={togglePlay}
-              className="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white hover:scale-105 transition-transform"
+              onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+              className="w-10 h-10 md:w-12 md:h-12 bg-white/10 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white hover:scale-105 transition-transform"
             >
-              {isPlaying ? <Pause size={24} fill="white" /> : <Play size={24} fill="white" />}
+              {isPlaying ? <Pause size={20} fill="white" className="md:w-6 md:h-6" /> : <Play size={20} fill="white" className="md:w-6 md:h-6" />}
             </button>
             
-            <div className="flex items-center gap-3 group/volume">
+            <div className="flex items-center gap-2 md:gap-3 group/volume">
               <button
-                onClick={toggleMute}
-                className="p-2 text-slate-400 hover:text-white transition-colors"
+                onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                className="p-1.5 md:p-2 text-slate-400 hover:text-white transition-colors"
               >
-                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                {isMuted ? <VolumeX size={18} className="md:w-5 md:h-5" /> : <Volume2 size={18} className="md:w-5 md:h-5" />}
               </button>
               <input
                 type="range"
@@ -151,34 +178,36 @@ export const Player: React.FC<PlayerProps> = ({
                 max="1"
                 step="0.05"
                 value={volume}
+                onClick={(e) => e.stopPropagation()}
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
                   setVolume(val);
                   if (videoRef.current) videoRef.current.volume = val;
                 }}
-                className="w-24 accent-blue-600 appearance-none bg-slate-700 h-1 rounded-full cursor-pointer"
+                className="w-16 md:w-24 accent-blue-600 appearance-none bg-slate-700 h-1 rounded-full cursor-pointer"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
             <button
-              onClick={handleRecording}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm shadow-lg transition-all ${
+              onClick={(e) => { e.stopPropagation(); handleRecording(); }}
+              className={`flex items-center gap-2 px-3 py-1.5 md:px-5 md:py-2.5 rounded-lg font-bold text-[10px] md:text-sm shadow-lg transition-all ${
                 isRecording 
                 ? 'bg-red-600 text-white animate-pulse shadow-red-600/20' 
                 : 'bg-white/10 text-white hover:bg-white/20 backdrop-blur-md border border-white/10'
               }`}
             >
-              <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-white' : 'bg-red-600'}`} />
-              {isRecording ? 'STOP' : 'RECORD'}
+              <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${isRecording ? 'bg-white' : 'bg-red-600'}`} />
+              <span className="hidden xs:inline">{isRecording ? 'STOP' : 'RECORD'}</span>
+              <span className="xs:hidden">{isRecording ? <Square size={12} fill="white" /> : <Circle size={12} fill="white" />}</span>
             </button>
             
             <button
-              onClick={() => videoRef.current?.requestFullscreen()}
-              className="p-2 text-slate-400 hover:text-white transition-colors"
+              onClick={(e) => { e.stopPropagation(); videoRef.current?.requestFullscreen(); }}
+              className="p-1.5 md:p-2 text-slate-400 hover:text-white transition-colors"
             >
-              <Maximize size={20} />
+              <Maximize size={18} className="md:w-5 md:h-5" />
             </button>
           </div>
         </div>
