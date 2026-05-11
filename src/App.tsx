@@ -225,11 +225,16 @@ export default function App() {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <motion.div 
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
           className="text-white"
         >
-          <Tv size={48} />
+          <img 
+            src="https://res.cloudinary.com/dfsfskmha/image/upload/v1778482307/rusba/rusba-tv-logo-blkbg_plumhb.png" 
+            alt="RusbaTV Loading" 
+            className="h-16 w-auto object-contain"
+            referrerPolicy="no-referrer"
+          />
         </motion.div>
       </div>
     );
@@ -268,8 +273,13 @@ export default function App() {
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-white">B1</div>
-            <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">Base1 TV</h1>
+            <img 
+              src="https://res.cloudinary.com/dfsfskmha/image/upload/v1778482307/rusba/rusba-tv-logo-blkbg_plumhb.png" 
+              alt="RusbaTV Logo" 
+              className="h-8 w-auto object-contain"
+              referrerPolicy="no-referrer"
+            />
+            <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">RusbaTV</h1>
           </div>
         </div>
 

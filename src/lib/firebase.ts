@@ -9,7 +9,6 @@ const app = initializeApp(firebaseConfig);
 // blocks in the preview / deployment environment. This ensures immediate transport fallback.
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-  useFetchStreams: false, // Prevents fetch stream hanging issues in some browser environments
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
 export const auth = getAuth(app);

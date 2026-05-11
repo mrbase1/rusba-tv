@@ -152,13 +152,22 @@ export function AdminDashboard({ onClose, availableChannels }: AdminDashboardPro
       <div className="w-full max-w-6xl h-full bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl">
         {/* Header */}
         <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-600 rounded-lg">
-              <ShieldAlert className="text-white" size={24} />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-white tracking-tight">Admin Operations</h2>
-              <p className="text-xs text-slate-500 font-medium">Manage users, payments, and content</p>
+          <div className="flex items-center gap-4">
+            <img 
+              src="https://res.cloudinary.com/dfsfskmha/image/upload/v1778482307/rusba/rusba-tv-logo-blkbg_plumhb.png" 
+              alt="RusbaTV Logo" 
+              className="h-10 w-auto object-contain"
+              referrerPolicy="no-referrer"
+            />
+            <div className="h-10 w-px bg-slate-800 ml-2 mr-2 hidden sm:block"></div>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-600 rounded-lg">
+                <ShieldAlert className="text-white" size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white tracking-tight">Admin Operations</h2>
+                <p className="text-xs text-slate-500 font-medium">Manage users, payments, and content</p>
+              </div>
             </div>
           </div>
           <button 

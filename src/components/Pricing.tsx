@@ -88,10 +88,18 @@ export function Pricing({ user, onClose, onSuccess }: PricingProps) {
       <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
         <div className="p-8 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-600 rounded-xl">
-              <Crown className="text-white" size={24} />
+            <img 
+              src="https://res.cloudinary.com/dfsfskmha/image/upload/v1778482307/rusba/rusba-tv-logo-blkbg_plumhb.png" 
+              alt="RusbaTV Logo" 
+              className="h-10 w-auto object-contain mr-2"
+              referrerPolicy="no-referrer"
+            />
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-600 rounded-xl">
+                <Crown className="text-white" size={24} />
+              </div>
+              <h2 className="text-xl font-bold text-white tracking-tight">Select a Plan</h2>
             </div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Select a Plan</h2>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400">
             <X size={24} />

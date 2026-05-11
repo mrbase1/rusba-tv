@@ -1,5 +1,5 @@
 {
-  "name": "Base1 TV",
+  "name": "RusbaTV",
   "description": "Premium IPTV streaming application with EPG support, favorites, recording capabilities, and seamless Chromecast integration.",
   "requestFramePermissions": [
     "camera",
