@@ -25,12 +25,6 @@ export async function parseM3U(url: string): Promise<Channel[]> {
     
     return result.items.map((item, index) => {
       const category = item.group.title || 'General';
-      // Mark sports and movie channels as premium by default for demo
-      const isPremium = category.toLowerCase().includes('sports') || 
-                        category.toLowerCase().includes('movies') ||
-                        item.name?.toLowerCase().includes('premium') ||
-                        item.name?.toLowerCase().includes('hbo') ||
-                        item.name?.toLowerCase().includes('sky');
 
       return {
         id: item.tvg.id || `channel-${index}`,
@@ -38,7 +32,7 @@ export async function parseM3U(url: string): Promise<Channel[]> {
         logo: item.tvg.logo || '',
         url: item.url,
         category,
-        isPremium
+        isPremium: false
       };
     });
   } catch (error) {

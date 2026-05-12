@@ -318,7 +318,7 @@ export function AdminDashboard({ onClose, availableChannels }: AdminDashboardPro
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar flex-1 pb-4">
                   {paginatedChannels.map(ch => {
                     const isFeatured = featuredChannels.some(f => f.channelId === ch.id);
-                    const isPremium = premiumChannelIds.has(ch.id) || ch.isPremium;
+                    const isPremium = premiumChannelIds.has(ch.id);
                     return (
                       <div key={ch.id} className={`p-4 rounded-2xl border transition-all flex items-center gap-4 ${isFeatured ? 'bg-blue-600/10 border-blue-600/40' : 'bg-slate-800/40 border-slate-800'}`}>
                         <div className="w-12 h-12 bg-slate-900 rounded-lg p-2 flex-shrink-0 flex items-center justify-center border border-slate-800 relative">

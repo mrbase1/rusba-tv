@@ -59,7 +59,7 @@ export default function App() {
   const channelListRef = useRef<HTMLDivElement>(null);
 
   const handleChannelSelect = (ch: Channel, index?: number) => {
-    const isPremium = ch.isPremium || premiumIds.has(ch.id);
+    const isPremium = premiumIds.has(ch.id);
     if (isPremium && userProfile?.subscriptionTier !== 'premium') {
       setShowPricing(true);
       return;
@@ -132,8 +132,7 @@ export default function App() {
       const data = await parseM3U(DEFAULT_M3U);
       setChannels(data);
       if (data.length > 0) {
-        const firstFree = data.find(c => !c.isPremium) || data[0];
-        setSelectedChannel(firstFree);
+        setSelectedChannel(data[0]);
       }
       setIsLoading(false);
     };
@@ -776,7 +775,7 @@ export default function App() {
                         : ''}
                     `}
                   >
-                    { (ch.isPremium || premiumIds.has(ch.id)) && (
+                    { premiumIds.has(ch.id) && (
                       <div className="absolute top-2 right-2 z-10 p-1 bg-amber-500 rounded-full text-white shadow-lg">
                         <Lock size={12} />
                       </div>
