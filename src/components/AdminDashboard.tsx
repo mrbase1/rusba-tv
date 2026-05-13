@@ -257,7 +257,7 @@ export function AdminDashboard({ onClose, availableChannels }: AdminDashboardPro
                     <thead>
                       <tr className="bg-slate-800/80 border-b border-slate-700">
                         <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">User Details</th>
-                        <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Subscription</th>
+                        <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Subscription / Expiry</th>
                         <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Registered</th>
                       </tr>
                     </thead>
@@ -276,14 +276,21 @@ export function AdminDashboard({ onClose, availableChannels }: AdminDashboardPro
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <select 
-                              value={u.subscriptionTier || 'free'}
-                              onChange={(e) => handleUpdateUserTier(u.id, e.target.value)}
-                              className="bg-slate-900 border border-slate-700 text-xs font-bold rounded-lg px-3 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none text-white appearance-none cursor-pointer hover:border-slate-500 transition-colors"
-                            >
-                              <option value="free">FREE</option>
-                              <option value="premium">&crown; PREMIUM</option>
-                            </select>
+                            <div className="flex flex-col items-center gap-1">
+                              <select 
+                                value={u.subscriptionTier || 'free'}
+                                onChange={(e) => handleUpdateUserTier(u.id, e.target.value)}
+                                className="bg-slate-900 border border-slate-700 text-xs font-bold rounded-lg px-3 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none text-white appearance-none cursor-pointer hover:border-slate-500 transition-colors"
+                              >
+                                <option value="free">FREE</option>
+                                <option value="premium">&crown; PREMIUM</option>
+                              </select>
+                              {u.subscriptionExpiry && (
+                                <p className={`text-[9px] font-bold uppercase tracking-tighter ${new Date(u.subscriptionExpiry) < new Date() ? 'text-red-500' : 'text-emerald-500'}`}>
+                                  Exp: {new Date(u.subscriptionExpiry).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-right">
                             <p className="text-[10px] font-mono text-slate-500 uppercase tracking-tighter">

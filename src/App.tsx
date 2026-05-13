@@ -27,7 +27,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { auth, signIn, logout, db } from './lib/firebase';
 import { handleFirestoreError, OperationType } from './lib/firestoreErrorHandler';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, onSnapshot, query, where, addDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, onSnapshot, query, where, addDoc, deleteDoc } from 'firebase/firestore';
 import { Channel, parseM3U } from './services/iptvService';
 import { Player } from './components/Player';
 import { AdminDashboard } from './components/AdminDashboard';
@@ -54,7 +54,53 @@ export default function App() {
   const [featuredIds, setFeaturedIds] = useState<Set<string>>(new Set());
   const [premiumIds, setPremiumIds] = useState<Set<string>>(new Set());
   const [showPricing, setShowPricing] = useState(false);
+  const [subscriptionNotice, setSubscriptionNotice] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
+
+  // Subscription Expiry Check
+  useEffect(() => {
+    if (!user || !userProfile) return;
+
+    const checkSubscription = async () => {
+      const now = new Date();
+      const expiryDate = userProfile.subscriptionExpiry ? new Date(userProfile.subscriptionExpiry) : null;
+      
+      if (expiryDate) {
+        if (expiryDate < now && userProfile.subscriptionTier === 'premium') {
+          // EXPIRED
+          try {
+            await updateDoc(doc(db, 'users', user.uid), {
+              subscriptionTier: 'free',
+              updatedAt: now.toISOString()
+            });
+            setSubscriptionNotice("Your premium subscription has expired. Reverting to Free plan.");
+          } catch (error) {
+            handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+          }
+        } else if (userProfile.subscriptionTier === 'premium') {
+          // NEAR EXPIRY CHECK (within 7 days)
+          const diffTime = expiryDate.getTime() - now.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          if (diffDays <= 7 && diffDays > 0) {
+            setSubscriptionNotice(`Your premium subscription expires in ${diffDays} ${diffDays === 1 ? 'day' : 'days'}. Click here to renew.`);
+            
+            // EMAIL SIMULATION -> Log only once per day
+            const lastNotified = userProfile.lastNotificationDate;
+            const todayStr = now.toISOString().split('T')[0];
+            if (lastNotified !== todayStr) {
+               console.log(`[SIMULATION] Email sent to ${user.email}: Your RusbaTV subscription expires in ${diffDays} days.`);
+               await updateDoc(doc(db, 'users', user.uid), {
+                  lastNotificationDate: todayStr
+               });
+            }
+          }
+        }
+      }
+    };
+
+    checkSubscription();
+  }, [user, userProfile]);
   const [isTvMode, setIsTvMode] = useState(false);
   const channelListRef = useRef<HTMLDivElement>(null);
 
@@ -382,7 +428,36 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* SUBSCRIPTION NOTICE */}
+      <AnimatePresence>
+        {subscriptionNotice && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-amber-600/20 border-b border-amber-600/30 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-amber-500 z-[100]"
+          >
+            <div className="flex items-center gap-2">
+              <Bell size={14} className="animate-bounce" />
+              <span>{subscriptionNotice}</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setShowPricing(true)}
+                className="bg-amber-600 text-white px-3 py-1 rounded-full hover:bg-amber-700 transition-colors"
+              >
+                Renew Now
+              </button>
+              <button onClick={() => setSubscriptionNotice(null)} className="hover:text-amber-400 transition-colors">
+                <X size={14} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* HEADER */}
+
       <header className="h-16 border-b border-slate-800 flex items-center justify-between px-4 sm:px-8 sticky top-0 bg-slate-950/80 backdrop-blur-md z-50">
         <div className="flex items-center gap-2 sm:gap-4">
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-800 rounded-lg lg:hidden">

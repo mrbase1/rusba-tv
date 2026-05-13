@@ -10,6 +10,8 @@
         "displayName": { "type": "string" },
         "role": { "type": "string", "enum": ["user", "admin"] },
         "subscriptionTier": { "type": "string", "enum": ["free", "premium"] },
+        "subscriptionExpiry": { "type": "string", "format": "date-time" },
+        "lastNotificationDate": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role", "subscriptionTier"]
