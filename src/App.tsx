@@ -35,6 +35,92 @@ import { Pricing } from './components/Pricing';
 
 const DEFAULT_M3U = 'https://iptv-org.github.io/iptv/index.m3u';
 
+// Memoized Channel Item for Performance
+const ChannelItem = React.memo(({ 
+  ch, 
+  index, 
+  isSelected, 
+  isFocused, 
+  isPremium, 
+  isFavorite, 
+  viewMode, 
+  onSelect, 
+  onFavorite 
+}: { 
+  ch: Channel, 
+  index: number, 
+  isSelected: boolean, 
+  isFocused: boolean, 
+  isPremium: boolean, 
+  isFavorite: boolean, 
+  viewMode: 'grid' | 'list', 
+  onSelect: (ch: Channel, idx: number) => void,
+  onFavorite: (ch: Channel) => void
+}) => {
+  return (
+    <motion.div
+      layout
+      onClick={() => onSelect(ch, index)}
+      className={`
+        group relative flex transition-all text-left outline-none cursor-pointer
+        ${viewMode === 'grid' ? 'flex-col bg-slate-800 border border-slate-700 p-3 rounded-xl hover:border-blue-500' : 'flex-row items-center gap-4 p-3 bg-slate-800/40 border border-transparent rounded-xl hover:bg-slate-800 hover:border-slate-700'}
+        ${isSelected 
+          ? 'border-blue-600 ring-1 ring-blue-600/50 bg-slate-800 shadow-lg shadow-blue-600/10' 
+          : ''}
+        ${isFocused 
+          ? 'ring-4 ring-blue-500 ring-offset-2 ring-offset-slate-900 border-blue-500 scale-[1.05] z-20 shadow-[0_0_30px_rgba(37,99,235,0.4)]' 
+          : ''}
+      `}
+    >
+      { isPremium && (
+        <div className="absolute top-2 right-2 z-10 p-1 bg-amber-500 rounded-full text-white shadow-lg">
+          <Lock size={12} />
+        </div>
+      )}
+      <div className={`
+        bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 transition-transform group-hover:scale-[1.02]
+        ${viewMode === 'grid' ? 'w-full aspect-square mb-2 p-4' : 'w-12 h-12 p-2'}
+      `}>
+        {ch.logo ? (
+          <img 
+            src={ch.logo} 
+            alt={ch.name} 
+            className="max-w-full max-h-full object-contain" 
+            referrerPolicy="no-referrer" 
+            loading="lazy"
+          />
+        ) : (
+          <div className={`font-black text-slate-400 ${viewMode === 'grid' ? 'text-2xl' : 'text-lg'}`}>
+            {ch.name.substring(0, 2).toUpperCase()}
+          </div>
+        )}
+      </div>
+      
+      <div className="min-w-0 flex-1">
+        <p className={`font-bold text-xs truncate ${isSelected ? 'text-blue-400' : 'text-white'}`}>
+          {ch.name}
+        </p>
+        <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 truncate">
+          {ch.category}
+        </p>
+      </div>
+
+      <button 
+        onClick={(e) => {
+          e.stopPropagation();
+          onFavorite(ch);
+        }}
+        className={`
+          absolute top-1 right-1 p-1.5 rounded-full transition-all
+          ${isFavorite ? 'text-red-500' : 'text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-500/50'}
+        `}
+      >
+        <Heart size={14} fill={isFavorite ? 'currentColor' : 'none'} />
+      </button>
+    </motion.div>
+  );
+});
+
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -56,6 +142,7 @@ export default function App() {
   const [showPricing, setShowPricing] = useState(false);
   const [subscriptionNotice, setSubscriptionNotice] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [visibleCount, setVisibleCount] = useState(100);
 
   // Subscription Expiry Check
   useEffect(() => {
@@ -174,6 +261,23 @@ export default function App() {
 
     // Load Channels
     const loadChannels = async () => {
+      // Fast path: Check cache synchronously if possible (already handled in service, but we want UI to react)
+      const cached = localStorage.getItem('rusba_iptv_cache');
+      if (cached) {
+        try {
+          const { data } = JSON.parse(cached);
+          if (Array.isArray(data) && data.length > 0) {
+            setChannels(data);
+            setSelectedChannel(data[0]);
+            setIsLoading(false);
+            // Still fetch fresh data in background
+            const freshData = await parseM3U(DEFAULT_M3U);
+            setChannels(freshData);
+            return;
+          }
+        } catch (e) {}
+      }
+
       setIsLoading(true);
       const data = await parseM3U(DEFAULT_M3U);
       setChannels(data);
@@ -290,10 +394,22 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [filteredChannels, focusedIndex, viewMode, showAdminDashboard, showPricing, showAdOverlay]);
 
-  // Reset focus when category or search changes
+  // Reset focus and visible count when category or search changes
   useEffect(() => {
     setFocusedIndex(-1);
+    setVisibleCount(100);
+    // Scroll list to top
+    if (channelListRef.current) {
+        channelListRef.current.scrollTop = 0;
+    }
   }, [activeCategory, searchQuery]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 400) {
+      setVisibleCount(prev => prev + 100);
+    }
+  };
 
   const toggleFavorite = async (channel: Channel) => {
     if (!user) {
@@ -830,72 +946,40 @@ export default function App() {
               
               <div 
                 ref={channelListRef}
+                onScroll={handleScroll}
                 className={`
                 flex-1 overflow-y-auto px-6 pb-8 custom-scrollbar min-h-0
                 ${viewMode === 'grid' ? 'grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-2 gap-3' : 'space-y-2'}
               `}>
-                {filteredChannels.map((ch, index) => (
-                  <motion.div
-                    key={ch.id}
-                    layout
-                    onClick={() => handleChannelSelect(ch, index)}
-                    className={`
-                      group relative flex transition-all text-left outline-none cursor-pointer
-                      ${viewMode === 'grid' ? 'flex-col bg-slate-800 border border-slate-700 p-3 rounded-xl hover:border-blue-500' : 'flex-row items-center gap-4 p-3 bg-slate-800/40 border border-transparent rounded-xl hover:bg-slate-800 hover:border-slate-700'}
-                      ${selectedChannel?.id === ch.id 
-                        ? 'border-blue-600 ring-1 ring-blue-600/50 bg-slate-800 shadow-lg shadow-blue-600/10' 
-                        : ''}
-                      ${focusedIndex === index 
-                        ? 'ring-4 ring-blue-500 ring-offset-2 ring-offset-slate-900 border-blue-500 scale-[1.05] z-20 shadow-[0_0_30px_rgba(37,99,235,0.4)]' 
-                        : ''}
-                    `}
-                  >
-                    { premiumIds.has(ch.id) && (
-                      <div className="absolute top-2 right-2 z-10 p-1 bg-amber-500 rounded-full text-white shadow-lg">
-                        <Lock size={12} />
+                {isLoading && channels.length === 0 ? (
+                  Array.from({ length: 20 }).map((_, i) => (
+                    <div key={i} className={`p-4 rounded-xl bg-slate-800/40 border border-slate-800/50 flex ${viewMode === 'grid' ? 'flex-col gap-3' : 'flex-row gap-4'}`}>
+                      <div className={`bg-slate-700/50 animate-pulse rounded-lg ${viewMode === 'grid' ? 'w-full aspect-square' : 'w-12 h-12'}`} />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 bg-slate-700/50 animate-pulse rounded w-3/4" />
+                        <div className="h-2 bg-slate-700/50 animate-pulse rounded w-1/2" />
                       </div>
-                    )}
-                    <div className={`
-                      bg-slate-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 transition-transform group-hover:scale-[1.02]
-                      ${viewMode === 'grid' ? 'w-full aspect-square mb-2 p-4' : 'w-12 h-12 p-2'}
-                    `}>
-                      {ch.logo ? (
-                        <img 
-                          src={ch.logo} 
-                          alt={ch.name} 
-                          className="max-w-full max-h-full object-contain" 
-                          referrerPolicy="no-referrer" 
-                        />
-                      ) : (
-                        <div className={`font-black text-slate-400 ${viewMode === 'grid' ? 'text-2xl' : 'text-lg'}`}>
-                          {ch.name.substring(0, 2).toUpperCase()}
-                        </div>
-                      )}
                     </div>
-                    
-                    <div className="min-w-0 flex-1">
-                      <p className={`font-bold text-xs truncate ${selectedChannel?.id === ch.id ? 'text-blue-400' : 'text-white'}`}>
-                        {ch.name}
-                      </p>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 truncate">
-                        {ch.category}
-                      </p>
-                    </div>
-
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(ch);
-                      }}
-                      className={`
-                        absolute top-1 right-1 p-1.5 rounded-full transition-all
-                        ${favorites.has(ch.id) ? 'text-red-500' : 'text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-500/50'}
-                      `}
-                    >
-                      <Heart size={14} fill={favorites.has(ch.id) ? 'currentColor' : 'none'} />
-                    </button>
-                  </motion.div>
+                  ))
+                ) : filteredChannels.slice(0, visibleCount).map((ch, index) => (
+                  <ChannelItem
+                    key={ch.id}
+                    ch={ch}
+                    index={index}
+                    isSelected={selectedChannel?.id === ch.id}
+                    isFocused={focusedIndex === index}
+                    isPremium={premiumIds.has(ch.id)}
+                    isFavorite={favorites.has(ch.id)}
+                    viewMode={viewMode}
+                    onSelect={handleChannelSelect}
+                    onFavorite={toggleFavorite}
+                  />
                 ))}
+                {filteredChannels.length > visibleCount && (
+                   <div className="col-span-full py-8 flex justify-center">
+                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                   </div>
+                )}
               </div>
             </div>
           </div>

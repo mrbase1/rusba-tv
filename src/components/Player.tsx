@@ -73,7 +73,21 @@ export const Player: React.FC<PlayerProps> = ({
     };
 
     if (Hls.isSupported()) {
-      hls = new Hls();
+      hls = new Hls({
+        capLevelToPlayerSize: true,
+        enableWorker: true,
+        maxBufferSize: 30 * 1000 * 1000, // 30MB
+        maxBufferLength: 30,
+        startLevel: -1,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 10,
+        manifestLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 5,
+        levelLoadingTimeOut: 20000,
+        levelLoadingMaxRetry: 4,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 6,
+      });
       hls.loadSource(url);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -81,6 +95,21 @@ export const Player: React.FC<PlayerProps> = ({
           if (error.name !== 'AbortError') console.error('Playback error:', error);
         });
         setIsPlaying(true);
+      });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              hls?.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls?.recoverMediaError();
+              break;
+            default:
+              hls?.destroy();
+              break;
+          }
+        }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = url;

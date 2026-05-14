@@ -17,13 +17,31 @@ export interface EPGProgram {
   description?: string;
 }
 
+const M3U_CACHE_KEY = 'rusba_iptv_cache';
+const CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
+
 export async function parseM3U(url: string): Promise<Channel[]> {
+  // Check Cache
+  try {
+    const cached = localStorage.getItem(M3U_CACHE_KEY);
+    if (cached) {
+      const { data, timestamp, cachedUrl } = JSON.parse(cached);
+      const isExpired = Date.now() - timestamp > CACHE_TTL;
+      if (!isExpired && cachedUrl === url && Array.isArray(data)) {
+        console.log('IPTV: Using cached data');
+        return data;
+      }
+    }
+  } catch (e) {
+    console.warn('IPTV cache read error:', e);
+  }
+
   try {
     const response = await fetch(url);
     const m3u = await response.text();
     const result = parser.parse(m3u);
     
-    return result.items.map((item, index) => {
+    const channels = result.items.map((item, index) => {
       const category = item.group.title || 'General';
 
       return {
@@ -35,6 +53,19 @@ export async function parseM3U(url: string): Promise<Channel[]> {
         isPremium: false
       };
     });
+
+    // Save to Cache
+    try {
+      localStorage.setItem(M3U_CACHE_KEY, JSON.stringify({
+        data: channels,
+        timestamp: Date.now(),
+        cachedUrl: url
+      }));
+    } catch (e) {
+      console.warn('IPTV cache write error:', e);
+    }
+
+    return channels;
   } catch (error) {
     console.error('Error parsing M3U:', error);
     return [];
