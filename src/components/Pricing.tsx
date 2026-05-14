@@ -124,7 +124,11 @@ export function Pricing({ user, onClose, onSuccess }: PricingProps) {
               <h2 className="text-lg font-bold text-white tracking-tight">Premium Access</h2>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400">
+          <button 
+            onClick={onClose} 
+            aria-label="Close pricing modal"
+            className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400"
+          >
             <X size={24} />
           </button>
         </div>
@@ -135,6 +139,7 @@ export function Pricing({ user, onClose, onSuccess }: PricingProps) {
               <button
                 key={plan.months}
                 onClick={() => setSelectedMonths(plan.months)}
+                aria-label={`Select ${plan.label} plan for ${plan.price} Naira`}
                 className={`p-4 rounded-2xl border transition-all text-left relative ${
                   selectedMonths === plan.months 
                     ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-600/20' 

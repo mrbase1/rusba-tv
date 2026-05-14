@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback, Suspense, lazy } from 'react';
 import { 
   Tv, 
   Search, 
@@ -30,8 +30,9 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, collection, onSnapshot, query, where, addDoc, deleteDoc } from 'firebase/firestore';
 import { Channel, parseM3U } from './services/iptvService';
 import { Player } from './components/Player';
-import { AdminDashboard } from './components/AdminDashboard';
-import { Pricing } from './components/Pricing';
+
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const Pricing = lazy(() => import('./components/Pricing').then(m => ({ default: m.Pricing })));
 
 const DEFAULT_M3U = 'https://iptv-org.github.io/iptv/index.m3u';
 
@@ -110,6 +111,7 @@ const ChannelItem = React.memo(({
           e.stopPropagation();
           onFavorite(ch);
         }}
+        aria-label={isFavorite ? `Remove ${ch.name} from favorites` : `Add ${ch.name} to favorites`}
         className={`
           absolute top-1 right-1 p-1.5 rounded-full transition-all
           ${isFavorite ? 'text-red-500' : 'text-slate-700 opacity-0 group-hover:opacity-100 hover:text-red-500/50'}
@@ -191,7 +193,7 @@ export default function App() {
   const [isTvMode, setIsTvMode] = useState(false);
   const channelListRef = useRef<HTMLDivElement>(null);
 
-  const handleChannelSelect = (ch: Channel, index?: number) => {
+  const handleChannelSelect = useCallback((ch: Channel, index?: number) => {
     const isPremium = premiumIds.has(ch.id);
     if (isPremium && userProfile?.subscriptionTier !== 'premium') {
       setShowPricing(true);
@@ -201,7 +203,34 @@ export default function App() {
     if (index !== undefined) {
       setFocusedIndex(index);
     }
-  };
+  }, [premiumIds, userProfile]);
+
+  const toggleFavorite = useCallback(async (channel: Channel) => {
+    if (!user) {
+      alert("Please sign in to save favorites.");
+      return;
+    }
+    const isFav = favorites.has(channel.id);
+    const favDoc = doc(db, 'users', user.uid, 'favorites', channel.id);
+    const favPath = `users/${user.uid}/favorites/${channel.id}`;
+    
+    try {
+      if (isFav) {
+        await deleteDoc(favDoc);
+      } else {
+        await setDoc(favDoc, {
+          userId: user.uid,
+          channelId: channel.id,
+          name: channel.name,
+          logo: channel.logo,
+          url: channel.url,
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, favPath);
+    }
+  }, [user, favorites]);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
@@ -411,33 +440,6 @@ export default function App() {
     }
   };
 
-  const toggleFavorite = async (channel: Channel) => {
-    if (!user) {
-      alert("Please sign in to save favorites.");
-      return;
-    }
-    const isFav = favorites.has(channel.id);
-    const favDoc = doc(db, 'users', user.uid, 'favorites', channel.id);
-    const favPath = `users/${user.uid}/favorites/${channel.id}`;
-    
-    try {
-      if (isFav) {
-        await deleteDoc(favDoc);
-      } else {
-        await setDoc(favDoc, {
-          userId: user.uid,
-          channelId: channel.id,
-          name: channel.name,
-          logo: channel.logo,
-          url: channel.url,
-          createdAt: new Date().toISOString()
-        });
-      }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, favPath);
-    }
-  };
-
   const handleRecordStop = async (blob: Blob) => {
     if (!user) return;
     // In a real app, I'd upload to Firebase Storage. 
@@ -495,24 +497,28 @@ export default function App() {
       {/* PRICING MODAL */}
       <AnimatePresence>
         {showPricing && (
-          <Pricing 
-            user={user} 
-            onClose={() => setShowPricing(false)} 
-            onSuccess={() => {
-              setShowPricing(false);
-              alert("Payment successful! You are now a Premium member. Refreshing your profile...");
-            }}
-          />
+          <Suspense fallback={<div className="fixed inset-0 bg-black/60 z-[120] animate-pulse" />}>
+            <Pricing 
+              user={user} 
+              onClose={() => setShowPricing(false)} 
+              onSuccess={() => {
+                setShowPricing(false);
+                alert("Payment successful! You are now a Premium member. Refreshing your profile...");
+              }}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 
       {/* AD OVERLAY */}
       <AnimatePresence>
         {showAdminDashboard && (
-          <AdminDashboard 
-            onClose={() => setShowAdminDashboard(false)} 
-            availableChannels={channels}
-          />
+          <Suspense fallback={<div className="fixed inset-0 bg-black/60 z-[120] animate-pulse" />}>
+            <AdminDashboard 
+              onClose={() => setShowAdminDashboard(false)} 
+              availableChannels={channels}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 
@@ -576,7 +582,11 @@ export default function App() {
 
       <header className="h-16 border-b border-slate-800 flex items-center justify-between px-4 sm:px-8 sticky top-0 bg-slate-950/80 backdrop-blur-md z-50">
         <div className="flex items-center gap-2 sm:gap-4">
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-800 rounded-lg lg:hidden">
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+            aria-label="Toggle navigation menu"
+            className="p-2 hover:bg-slate-800 rounded-lg lg:hidden"
+          >
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2">
@@ -813,12 +823,20 @@ export default function App() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
-                          <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:text-white'}`}>
-                            <LayoutGrid size={16} />
-                          </button>
-                          <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:text-white'}`}>
-                            <ListIcon size={16} />
-                          </button>
+          <button 
+            onClick={() => setViewMode('grid')} 
+            aria-label="Grid view"
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:text-white'}`}
+          >
+            <LayoutGrid size={16} />
+          </button>
+          <button 
+            onClick={() => setViewMode('list')} 
+            aria-label="List view"
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:text-white'}`}
+          >
+            <ListIcon size={16} />
+          </button>
                         </div>
                       </div>
                     </div>

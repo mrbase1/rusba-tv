@@ -44,13 +44,31 @@ export const Player: React.FC<PlayerProps> = ({
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const isFull = !!(document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement);
+      setIsFullscreen(isFull);
+      
+      // Attempt to lock orientation to landscape on mobile when fullscreen
+      if (isFull && window.screen && window.screen.orientation && 'lock' in window.screen.orientation) {
+        try {
+          (window.screen.orientation as any).lock('landscape').catch((err: any) => {
+            console.warn('Orientation lock failed:', err);
+          });
+        } catch (e) {
+          console.warn('Orientation lock error:', e);
+        }
+      } else if (!isFull && window.screen && window.screen.orientation && 'unlock' in window.screen.orientation) {
+        try {
+          window.screen.orientation.unlock();
+        } catch (e) {}
+      }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    const events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'msfullscreenchange'];
+    events.forEach(event => document.addEventListener(event, handleFullscreenChange));
+    
     resetControlsTimeout();
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      events.forEach(event => document.removeEventListener(event, handleFullscreenChange));
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
   }, []);
@@ -184,12 +202,29 @@ export const Player: React.FC<PlayerProps> = ({
     e.stopPropagation();
     if (!containerRef.current) return;
 
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(err => {
-        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
-      });
+    const doc = document as any;
+    const container = containerRef.current as any;
+
+    if (!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement)) {
+      if (container.requestFullscreen) {
+        container.requestFullscreen();
+      } else if (container.webkitRequestFullscreen) {
+        container.webkitRequestFullscreen();
+      } else if (container.mozRequestFullScreen) {
+        container.mozRequestFullScreen();
+      } else if (container.msRequestFullscreen) {
+        container.msRequestFullscreen();
+      }
     } else {
-      document.exitFullscreen();
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      } else if (doc.mozCancelFullScreen) {
+        doc.mozCancelFullScreen();
+      } else if (doc.msExitFullscreen) {
+        doc.msExitFullscreen();
+      }
     }
   };
 
@@ -211,6 +246,7 @@ export const Player: React.FC<PlayerProps> = ({
           <div className="flex items-center gap-3 md:gap-6">
             <button
               onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
               className="w-10 h-10 md:w-12 md:h-12 bg-white/10 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white hover:scale-105 transition-transform"
             >
               {isPlaying ? <Pause size={20} fill="white" className="md:w-6 md:h-6" /> : <Play size={20} fill="white" className="md:w-6 md:h-6" />}
@@ -219,6 +255,7 @@ export const Player: React.FC<PlayerProps> = ({
             <div className="flex items-center gap-2 md:gap-3 group/volume">
               <button
                 onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                aria-label={isMuted ? 'Unmute' : 'Mute'}
                 className="p-1.5 md:p-2 text-slate-400 hover:text-white transition-colors"
               >
                 {isMuted ? <VolumeX size={18} className="md:w-5 md:h-5" /> : <Volume2 size={18} className="md:w-5 md:h-5" />}
@@ -229,6 +266,7 @@ export const Player: React.FC<PlayerProps> = ({
                 max="1"
                 step="0.05"
                 value={volume}
+                aria-label="Volume"
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
@@ -243,6 +281,7 @@ export const Player: React.FC<PlayerProps> = ({
           <div className="flex items-center gap-2 md:gap-4">
             <button
               onClick={(e) => { e.stopPropagation(); handleRecording(); }}
+              aria-label={isRecording ? 'Stop Recording' : 'Start Recording'}
               className={`flex items-center gap-2 px-3 py-1.5 md:px-5 md:py-2.5 rounded-lg font-bold text-[10px] md:text-sm shadow-lg transition-all ${
                 isRecording 
                 ? 'bg-red-600 text-white animate-pulse shadow-red-600/20' 
@@ -256,6 +295,7 @@ export const Player: React.FC<PlayerProps> = ({
             
             <button
               onClick={toggleFullscreen}
+              aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
               className="p-1.5 md:p-2 text-slate-400 hover:text-white transition-colors"
             >
               {isFullscreen ? <Minimize size={18} className="md:w-5 md:h-5" /> : <Maximize size={18} className="md:w-5 md:h-5" />}
