@@ -176,6 +176,11 @@ export const Player: React.FC<PlayerProps> = ({
         return;
       }
 
+      if (typeof MediaRecorder === 'undefined') {
+        alert("Recording not supported in this browser version.");
+        return;
+      }
+
       const recorder = new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
