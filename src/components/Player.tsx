@@ -28,6 +28,12 @@ export const Player: React.FC<PlayerProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+  
+  const isHttpOnHttps = typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http://');
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -80,8 +86,49 @@ export const Player: React.FC<PlayerProps> = ({
   useEffect(() => {
     if (!videoRef.current || !url) return;
 
+    // Reset state for new stream
+    setIsLoading(true);
+    setIsBuffering(false);
+    setErrorMsg(null);
+
     let hls: Hls | null = null;
     const video = videoRef.current;
+
+    // Standard media event listeners for high compatibility across all engines
+    const onWaiting = () => setIsBuffering(true);
+    const onPlaying = () => {
+      setIsLoading(false);
+      setIsBuffering(false);
+      setErrorMsg(null);
+    };
+    const onLoadStart = () => {
+      setIsLoading(true);
+      setErrorMsg(null);
+    };
+    const onPlayingStart = () => {
+      setIsLoading(false);
+      setIsBuffering(false);
+    };
+    const onCanPlay = () => {
+      setIsLoading(false);
+    };
+    const onNativeError = () => {
+      if (!video.src && !hls) return;
+      if (isHttpOnHttps) {
+        setErrorMsg("Mixed Content Security policy blocked loading. Google Chrome forbids unsecured 'http://' video streams on secure HTTPS websites like this one.");
+      } else {
+        setErrorMsg("Failed to decode or connect to the requested live stream. The stream server might be completely offline, geoblocked, or have invalid cross-origin CORS settings.");
+      }
+      setIsLoading(false);
+      setIsBuffering(false);
+    };
+
+    video.addEventListener('waiting', onWaiting);
+    video.addEventListener('playing', onPlaying);
+    video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('playing', onPlayingStart);
+    video.addEventListener('loadstart', onLoadStart);
+    video.addEventListener('error', onNativeError);
 
     const handleLoadedMetadata = () => {
       video.play().catch(error => {
@@ -91,39 +138,64 @@ export const Player: React.FC<PlayerProps> = ({
     };
 
     if (Hls.isSupported()) {
+      // Configure optimized HLS parameters for performance and network retries
       hls = new Hls({
-        capLevelToPlayerSize: true,
+        capLevelToPlayerSize: true, // Auto-adjust resolution with player size
         enableWorker: true,
         maxBufferSize: 30 * 1000 * 1000, // 30MB
-        maxBufferLength: 30,
-        startLevel: -1,
+        maxBufferLength: 15, // Reduced from 30 for lighter memory footprint on older devices (e.g. Android 6)
+        startLevel: -1, // Auto quality start
         liveSyncDurationCount: 3,
-        liveMaxLatencyDurationCount: 10,
-        manifestLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 5,
-        levelLoadingTimeOut: 20000,
-        levelLoadingMaxRetry: 4,
-        fragLoadingTimeOut: 20000,
-        fragLoadingMaxRetry: 6,
+        liveMaxLatencyDurationCount: 8,
+        manifestLoadingTimeOut: 15000,
+        manifestLoadingMaxRetry: 8, // More retries for stable connections
+        levelLoadingTimeOut: 15000,
+        levelLoadingMaxRetry: 6,
+        fragLoadingTimeOut: 15000,
+        fragLoadingMaxRetry: 8,
+        lowLatencyMode: true // Better latency / responsive loading
       });
+
       hls.loadSource(url);
       hls.attachMedia(video);
+
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         video.play().catch(error => {
           if (error.name !== 'AbortError') console.error('Playback error:', error);
         });
         setIsPlaying(true);
+        setIsLoading(false);
       });
+
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        setIsBuffering(false);
+      });
+
       hls.on(Hls.Events.ERROR, (_event, data) => {
+        console.warn('HLS.js player event warning/error:', data);
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              hls?.startLoad();
+              if (data.details === 'manifestLoadError' || data.details === 'manifestParsingError') {
+                if (isHttpOnHttps) {
+                  setErrorMsg("Mixed Content Security policy blocked loading. Google Chrome forbids unsecured 'http://' video streams on secure HTTPS websites like this one.");
+                } else {
+                  setErrorMsg(`Connection Failed (${data.details}). The stream is offline or the source server blocks browser access (CORS).`);
+                }
+                setIsLoading(false);
+              } else {
+                hls?.startLoad();
+              }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
+              console.log('Fatal media error, attempting automatic recovery...', data.details);
               hls?.recoverMediaError();
               break;
             default:
+              console.error('Fatal HLS stream error:', data.details);
+              setErrorMsg(`Unrecoverable Playback Error (${data.details}). Please choose another channel.`);
+              setIsLoading(false);
+              setIsBuffering(false);
               hls?.destroy();
               break;
           }
@@ -132,6 +204,8 @@ export const Player: React.FC<PlayerProps> = ({
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = url;
       video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    } else {
+      video.src = url;
     }
 
     return () => {
@@ -139,11 +213,17 @@ export const Player: React.FC<PlayerProps> = ({
         hls.destroy();
       }
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('waiting', onWaiting);
+      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('canplay', onCanPlay);
+      video.removeEventListener('playing', onPlayingStart);
+      video.removeEventListener('loadstart', onLoadStart);
+      video.removeEventListener('error', onNativeError);
       video.pause();
       video.src = '';
       video.load();
     };
-  }, [url]);
+  }, [url, retryKey]);
 
   const togglePlay = () => {
     if (videoRef.current) {
@@ -246,6 +326,70 @@ export const Player: React.FC<PlayerProps> = ({
         playsInline
       />
       
+      {/* Modern High-Fidelity Loading Overlay with Spinning Rhythm */}
+      {isLoading && !errorMsg && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 z-[60] select-none pointer-events-auto">
+          <div className="relative w-14 h-14 flex items-center justify-center">
+            {/* Soft backdrop pulse ring */}
+            <div className="absolute inset-0 rounded-full border-4 border-slate-800/85" />
+            {/* Elegant gradient spinning tracker */}
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 border-r-blue-400 rotate-0 animate-spin" />
+            <div className="w-5 h-5 rounded-full bg-blue-500 animate-pulse shadow-lg shadow-blue-500/50" />
+          </div>
+          <p className="mt-5 text-sm font-bold text-white uppercase tracking-widest text-shadow-md">
+            Connecting Stream
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500 text-shadow font-mono">
+            Optimizing buffers for older platforms...
+          </p>
+        </div>
+      )}
+
+      {/* Buffering Indicator Overlay (When streaming data stalls) */}
+      {isBuffering && !isLoading && !errorMsg && (
+        <div className="absolute top-4 right-4 z-40 bg-black/80 backdrop-blur-md border border-slate-800 rounded-xl px-3 py-2 flex items-center gap-2 select-none">
+          <div className="w-3 h-3 rounded-full border-2 border-slate-700 border-t-yellow-500 animate-spin" />
+          <span className="text-[10px] font-mono font-black text-yellow-500 uppercase tracking-widest">Buffering</span>
+        </div>
+      )}
+
+      {/* Beautiful Playback & CORS Block Error Fallback Frame */}
+      {errorMsg && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 px-6 py-4 text-center z-[70] select-none pointer-events-auto">
+          <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500 mb-4 animate-pulse">
+            <X size={28} />
+          </div>
+          <h4 className="text-sm font-bold text-white mb-2 uppercase tracking-wider">Stream Connection Failure</h4>
+          <p className="text-xs text-slate-400 max-w-md leading-relaxed mb-6 font-mono">
+            {errorMsg}
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setErrorMsg(null);
+                setIsLoading(true);
+                setRetryKey(prev => prev + 1);
+              }}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black rounded-xl transition-all shadow-lg active:scale-95 shadow-blue-600/25 uppercase tracking-wider"
+            >
+              Retry Connection
+            </button>
+            {isHttpOnHttps && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  alert("This is a standard security policy called 'Mixed Content Block' enforced by Google Chrome / Android. Because RusbaTV is loaded securely via HTTPS, Chrome forbids playing insecure 'http://' streams natively. To playback this channel, copy the URL to an external app like VLC, or upgrade to a premium HTTPS-secured stream provider.");
+                }}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-all border border-slate-700 active:scale-95 uppercase tracking-wider"
+              >
+                Learn More
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className={`absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent transition-opacity flex flex-col justify-end p-4 md:p-8 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="flex items-center justify-between gap-2 md:gap-4">
           <div className="flex items-center gap-3 md:gap-6">
